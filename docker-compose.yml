@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: chat_postgres
+    environment:
+      POSTGRES_DB: chat_app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - '5433:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - chat_network
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: chat_mailpit
+    ports:
+      - '1025:1025' # SMTP port
+      - '8025:8025' # Web interface port
+    networks:
+      - chat_network
+
+volumes:
+  postgres_data:
+
+networks:
+  chat_network:
+    driver: bridge

@@ -1,0 +1,27 @@
+.loadingIndicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0vw;
+  height: 2px;
+  background-color: black;
+  opacity: 1;
+  transition: opacity 0.2s ease-in-out;
+  z-index: 99999;
+}
+
+.loadingIndicator.inactive {
+  opacity: 0;
+}
+
+.loadingIndicator.loading {
+  transition: width 0.15s ease-in;
+}
+
+.loadingIndicator.done {
+  width: 100vw;
+  transition:
+    width 0.1s ease-out,
+    opacity 0.35s ease-in-out;
+  opacity: 0;
+}

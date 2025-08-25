@@ -1,0 +1,68 @@
+// This file is the main Prisma schema file.
+// For production builds, use: prisma generate --no-engine
+// This reduces bundle size by excluding the Prisma engine from the client bundle.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  username  String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  conversations UserConversation[]
+  messages      Message[]
+
+  @@map("users")
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  participants UserConversation[]
+  messages     Message[]
+
+  @@map("conversations")
+}
+
+model UserConversation {
+  id             String   @id @default(cuid())
+  userId         String
+  conversationId String
+  createdAt      DateTime @default(now())
+
+  // Relations
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, conversationId])
+  @@map("user_conversations")
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  content        String
+  senderId       String
+  conversationId String
+  createdAt      DateTime @default(now())
+
+  // Relations
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
