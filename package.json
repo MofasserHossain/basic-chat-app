@@ -44,6 +44,9 @@
     "tailwindcss-animate": "^1.0.7",
     "zod": "^3.22.4"
   },
+  "prisma": {
+    "seed": "node scripts/seed-demo-data.js"
+  },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@eslint/js": "^9.33.0",

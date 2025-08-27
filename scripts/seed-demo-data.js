@@ -26,6 +26,18 @@ async function main() {
       username: 'charlie',
       password: 'password123',
     },
+    {
+      email: 'diana@example.com',
+      name: 'Diana Prince',
+      username: 'diana',
+      password: 'password123',
+    },
+    {
+      email: 'edward@example.com',
+      name: 'Edward Norton',
+      username: 'edward',
+      password: 'password123',
+    },
   ]
 
   for (const userData of users) {
@@ -45,7 +57,7 @@ async function main() {
     console.log(`✅ Created user: ${user.name} (@${user.username})`)
   }
 
-  // Create a demo conversation between Alice and Bob
+  // Create a demo direct conversation between Alice and Bob
   const alice = await prisma.user.findUnique({
     where: { email: 'alice@example.com' },
   })
@@ -56,6 +68,7 @@ async function main() {
   if (alice && bob) {
     const conversation = await prisma.conversation.create({
       data: {
+        isGroup: false, // Direct conversation
         participants: {
           create: [{ userId: alice.id }, { userId: bob.id }],
         },
@@ -89,15 +102,134 @@ async function main() {
       })
     }
 
-    console.log('✅ Created demo conversation with messages')
+    console.log('✅ Created demo direct conversation with messages')
+  }
+
+  // Create a demo group conversation
+  const charlie = await prisma.user.findUnique({
+    where: { email: 'charlie@example.com' },
+  })
+  const diana = await prisma.user.findUnique({
+    where: { email: 'diana@example.com' },
+  })
+  const edward = await prisma.user.findUnique({
+    where: { email: 'edward@example.com' },
+  })
+
+  if (alice && charlie && diana && edward) {
+    const groupConversation = await prisma.conversation.create({
+      data: {
+        isGroup: true, // Group conversation
+        groupName: 'Project Team Alpha',
+        adminId: alice.id, // Alice is the admin
+        participants: {
+          create: [
+            { userId: alice.id, role: 'admin' },
+            { userId: charlie.id, role: 'member' },
+            { userId: diana.id, role: 'member' },
+            { userId: edward.id, role: 'member' },
+          ],
+        },
+      },
+    })
+
+    // Add some demo group messages
+    const groupMessages = [
+      {
+        content: 'Welcome everyone to Project Team Alpha!',
+        senderId: alice.id,
+      },
+      {
+        content: 'Thanks Alice! Excited to work with this team.',
+        senderId: charlie.id,
+      },
+      {
+        content: 'Same here! Looking forward to our collaboration.',
+        senderId: diana.id,
+      },
+      {
+        content: 'Great to meet everyone! When do we start?',
+        senderId: edward.id,
+      },
+      {
+        content: "Let's have our first meeting tomorrow at 10 AM.",
+        senderId: alice.id,
+      },
+    ]
+
+    for (const messageData of groupMessages) {
+      await prisma.message.create({
+        data: {
+          content: messageData.content,
+          senderId: messageData.senderId,
+          conversationId: groupConversation.id,
+        },
+      })
+    }
+
+    console.log('✅ Created demo group conversation with messages')
+  }
+
+  // Create another demo group conversation
+  if (bob && charlie && diana) {
+    const socialGroup = await prisma.conversation.create({
+      data: {
+        isGroup: true,
+        groupName: 'Weekend Warriors',
+        adminId: bob.id, // Bob is the admin
+        participants: {
+          create: [
+            { userId: bob.id, role: 'admin' },
+            { userId: charlie.id, role: 'member' },
+            { userId: diana.id, role: 'member' },
+          ],
+        },
+      },
+    })
+
+    // Add some demo social group messages
+    const socialMessages = [
+      { content: "Who's up for hiking this weekend?", senderId: bob.id },
+      {
+        content: "I'm in! The weather looks perfect.",
+        senderId: charlie.id,
+      },
+      {
+        content: 'Count me in too! Which trail should we do?',
+        senderId: diana.id,
+      },
+      {
+        content: 'How about Mount Tam? Great views and not too strenuous.',
+        senderId: bob.id,
+      },
+    ]
+
+    for (const messageData of socialMessages) {
+      await prisma.message.create({
+        data: {
+          content: messageData.content,
+          senderId: messageData.senderId,
+          conversationId: socialGroup.id,
+        },
+      })
+    }
+
+    console.log('✅ Created demo social group conversation with messages')
   }
 
   console.log('🎉 Demo data seeding completed!')
   console.log('')
   console.log('Demo accounts:')
-  console.log('- alice@example.com / password123')
-  console.log('- bob@example.com / password123')
+  console.log('- alice@example.com / password123 (Admin of Project Team Alpha)')
+  console.log('- bob@example.com / password123 (Admin of Weekend Warriors)')
   console.log('- charlie@example.com / password123')
+  console.log('- diana@example.com / password123')
+  console.log('- edward@example.com / password123')
+  console.log('')
+  console.log('Demo conversations:')
+  console.log('- Direct chat: Alice ↔ Bob')
+  console.log('- Group: Project Team Alpha (Alice, Charlie, Diana, Edward)')
+  console.log('- Group: Weekend Warriors (Bob, Charlie, Diana)')
 }
 
 main()

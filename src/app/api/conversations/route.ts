@@ -62,6 +62,13 @@ export async function GET(request: NextRequest) {
             },
           },
         },
+        admin: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        },
       },
       orderBy: {
         updatedAt: 'desc',
@@ -115,6 +122,7 @@ export async function POST(request: NextRequest) {
             },
           },
         },
+        isGroup: false, // Only check for direct conversations
       },
       include: {
         participants: {
@@ -143,6 +151,13 @@ export async function POST(request: NextRequest) {
             },
           },
         },
+        admin: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        },
       },
     })
 
@@ -153,6 +168,7 @@ export async function POST(request: NextRequest) {
     // Create new conversation
     const conversation = await prisma.conversation.create({
       data: {
+        isGroup: false, // Direct conversation
         participants: {
           create: [{ userId: userId }, { userId: otherUserId }],
         },
@@ -178,6 +194,13 @@ export async function POST(request: NextRequest) {
                 username: true,
               },
             },
+          },
+        },
+        admin: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
           },
         },
       },

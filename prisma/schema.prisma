@@ -1,7 +1,3 @@
-// This file is the main Prisma schema file.
-// For production builds, use: prisma generate --no-engine
-// This reduces bundle size by excluding the Prisma engine from the client bundle.
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,57 +8,55 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  username  String   @unique
-  password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  conversations UserConversation[]
-  messages      Message[]
+  id                 String             @id @default(cuid())
+  email              String             @unique
+  name               String
+  username           String             @unique
+  password           String
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  adminConversations Conversation[]     @relation("GroupAdmin")
+  messages           Message[]
+  conversations      UserConversation[]
 
   @@map("users")
 }
 
 model Conversation {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  participants UserConversation[]
+  id           String             @id @default(cuid())
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  adminId      String?
+  groupName    String?
+  isGroup      Boolean            @default(false)
+  admin        User?              @relation("GroupAdmin", fields: [adminId], references: [id])
   messages     Message[]
+  participants UserConversation[]
 
   @@map("conversations")
 }
 
 model UserConversation {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   userId         String
   conversationId String
-  createdAt      DateTime @default(now())
-
-  // Relations
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  role           String       @default("member")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, conversationId])
   @@map("user_conversations")
 }
 
 model Message {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   content        String
   senderId       String
   conversationId String
-  createdAt      DateTime @default(now())
-
-  // Relations
-  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@map("messages")
 }

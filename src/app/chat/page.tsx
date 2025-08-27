@@ -1,5 +1,8 @@
 'use client'
 
+import { GroupCreationPopup } from '@/components/group-creation-popup'
+import { GroupManagementPopup } from '@/components/group-management-popup'
+import { ProfileAvatar } from '@/components/profile-avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -11,8 +14,17 @@ import { useAuth } from '@/contexts/auth-context'
 import { useSocketConnection } from '@/hooks/use-socket-connection'
 import { cn } from '@/lib/utils'
 import { ChatMessage } from '@/types/websocket'
-import { Loader2, LogOut, Plus, Send } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import {
+  ArrowLeft,
+  Loader2,
+  LogOut,
+  Plus,
+  Send,
+  Settings,
+  User,
+  Users,
+} from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -24,8 +36,12 @@ interface User {
 
 interface Conversation {
   id: string
+  groupName?: string
+  isGroup: boolean
+  adminId?: string
   participants: Array<{
     user: User
+    role?: string
   }>
   messages: ChatMessage[]
   updatedAt: string
@@ -34,6 +50,7 @@ interface Conversation {
 export default function ChatPage() {
   const { user, logout, isLoading } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messageInputRef = useRef<HTMLInputElement>(null)
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -51,6 +68,8 @@ export default function ChatPage() {
   const [isTyping, setIsTyping] = useState(false)
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
+  const [isGroupCreationOpen, setIsGroupCreationOpen] = useState(false)
+  const [isGroupManagementOpen, setIsGroupManagementOpen] = useState(false)
 
   // Initialize WebSocket
   const { isConnected, isAuthenticated, userData, socket } =
@@ -280,9 +299,21 @@ export default function ChatPage() {
         socket.emit('join:conversation', conversation.id)
         // console.log('Joined conversation room:', conversation.id)
       })
+
+      // Check if there's a conversation ID in the URL and restore it
+      const conversationIdFromURL = searchParams.get('conversation')
+      if (conversationIdFromURL) {
+        const conversationToRestore = conversations.find(
+          (conv) => conv.id === conversationIdFromURL,
+        )
+        if (conversationToRestore) {
+          setSelectedConversation(conversationToRestore)
+          // Don't fetch messages here, it will be handled by the useEffect that watches selectedConversation
+        }
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, isAuthenticated, conversations.length > 0]) // Only depend on conversations.length > 0
+  }, [socket, isAuthenticated, conversations.length > 0, searchParams]) // Added searchParams dependency
 
   useEffect(() => {
     if (selectedConversation) {
@@ -403,6 +434,9 @@ export default function ChatPage() {
         setSearchQuery('')
         setSearchResults([])
 
+        // Update URL with new conversation
+        updateURLWithConversation(conversation.id)
+
         // Join the conversation room immediately
         if (socket && isAuthenticated) {
           socket.emit('join:conversation', conversation.id)
@@ -422,6 +456,69 @@ export default function ChatPage() {
       toast.error('Error starting conversation:' + errorMessage)
     } finally {
       setIsLoadingConversation(false)
+    }
+  }
+
+  const createGroup = async (groupName: string, memberIds: string[]) => {
+    try {
+      setIsLoadingConversation(true)
+      const response = await fetch('/api/conversations/group', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          groupName,
+          memberIds,
+          creatorId: user?.id,
+        }),
+      })
+
+      if (response.ok) {
+        const conversation = await response.json()
+        setConversations((prev) => [conversation, ...prev])
+        setSelectedConversation(conversation)
+        setIsGroupCreationOpen(false)
+
+        // Update URL with new group conversation
+        updateURLWithConversation(conversation.id)
+
+        // Join the conversation room immediately
+        if (socket && isAuthenticated) {
+          socket.emit('join:conversation', conversation.id)
+          // console.log('Joined new group conversation room:', conversation.id)
+        }
+
+        // Focus input when starting new conversation
+        setTimeout(() => {
+          if (messageInputRef.current) {
+            messageInputRef.current.focus()
+          }
+        }, 100)
+
+        toast.success('Group created successfully!')
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to create group')
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error'
+      toast.error('Error creating group: ' + errorMessage)
+    } finally {
+      setIsLoadingConversation(false)
+    }
+  }
+
+  const handleGroupUpdated = (updatedConversation: Conversation) => {
+    setConversations((prev) =>
+      prev.map((conv) =>
+        conv.id === updatedConversation.id ? updatedConversation : conv,
+      ),
+    )
+
+    if (selectedConversation?.id === updatedConversation.id) {
+      setSelectedConversation(updatedConversation)
     }
   }
 
@@ -521,17 +618,41 @@ export default function ChatPage() {
     return conversation.participants.find((p) => p.user.id !== user?.id)?.user
   }
 
+  // Function to update URL with selected conversation
+  const updateURLWithConversation = (conversationId: string) => {
+    const url = new URL(window.location.href)
+    url.searchParams.set('conversation', conversationId)
+    window.history.pushState({}, '', url.toString())
+  }
+
+  // Function to clear conversation from URL
+  const clearConversationFromURL = () => {
+    const url = new URL(window.location.href)
+    url.searchParams.delete('conversation')
+    window.history.pushState({}, '', url.toString())
+  }
+
   const handleConversationSelect = (conversation: Conversation) => {
     setIsLoadingConversation(true)
     setSelectedConversation(conversation)
     setMessages([]) // Clear messages while loading
     setTypingUsers(new Set()) // Clear typing indicators
 
+    // Update URL with selected conversation
+    updateURLWithConversation(conversation.id)
+
     // Ensure we're in the conversation room
     if (socket && isAuthenticated) {
       socket.emit('join:conversation', conversation.id)
       // console.log('Joined conversation room:', conversation.id)
     }
+  }
+
+  const clearSelectedConversation = () => {
+    setSelectedConversation(null)
+    setMessages([])
+    setTypingUsers(new Set())
+    clearConversationFromURL()
   }
 
   if (!user) {
@@ -582,6 +703,18 @@ export default function ChatPage() {
                   </div>
                 </PopoverContent>
               </Popover>
+
+              {/* Create Group Button */}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsGroupCreationOpen(true)}
+                className="flex items-center gap-2"
+              >
+                <Users className="h-4 w-4" />
+                Group
+              </Button>
+
               <Button size="sm" variant="outline" onClick={handleLogout}>
                 <LogOut className="h-4 w-4" />
               </Button>
@@ -656,44 +789,54 @@ export default function ChatPage() {
                   }`}
                   onClick={() => handleConversationSelect(conversation)}
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{otherUser?.name}</p>
-                      <p className="text-sm text-gray-500">
-                        @{otherUser?.username}
-                      </p>
-                    </div>
-                    {lastMessage && (
-                      <span className="text-xs text-gray-400">
-                        {new Date(lastMessage.createdAt).toLocaleTimeString(
-                          [],
-                          {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          },
+                  <div className="flex items-start gap-3">
+                    {/* Profile Avatar */}
+                    <ProfileAvatar
+                      conversation={conversation}
+                      currentUserId={user?.id}
+                      size="md"
+                    />
+
+                    {/* Conversation Details */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          {conversation.isGroup ? (
+                            <div>
+                              <p className="font-medium text-gray-900 dark:text-gray-100">
+                                {conversation.groupName}
+                              </p>
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="font-medium text-gray-900 dark:text-gray-100">
+                                {otherUser?.name}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        {lastMessage && (
+                          <span className="ml-2 text-xs text-gray-400">
+                            {new Date(lastMessage.createdAt).toLocaleTimeString(
+                              [],
+                              {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              },
+                            )}
+                          </span>
                         )}
-                      </span>
-                    )}
+                      </div>
+                      {lastMessage && (
+                        <div className="mt-1">
+                          <p className="truncate text-sm text-gray-600 dark:text-gray-400">
+                            {lastMessage.sender.id === user?.id ? 'You: ' : ''}
+                            {lastMessage.content}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  {lastMessage && (
-                    <div className="mt-1">
-                      <p className="truncate text-sm text-gray-600 dark:text-gray-400">
-                        {lastMessage.sender.id === user?.id ? 'You: ' : ''}
-                        {lastMessage.content}
-                      </p>
-                      <p className="mt-1 text-xs text-gray-400">
-                        {new Date(lastMessage.createdAt).toLocaleDateString(
-                          [],
-                          {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          },
-                        )}
-                      </p>
-                    </div>
-                  )}
                 </div>
               )
             })
@@ -707,32 +850,61 @@ export default function ChatPage() {
           <>
             {/* Chat Header */}
             <div className="border-b border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-              <h2 className="text-lg font-semibold">
-                {getOtherParticipant(selectedConversation)?.name}
-              </h2>
-              <p className="text-sm text-gray-500">
-                @{getOtherParticipant(selectedConversation)?.username}
-              </p>
-              {/* WebSocket connection and authentication status */}
-              {/* <div className="flex items-center gap-4 mt-2">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                  <span className="text-xs text-gray-500">
-                    {isConnected ? 'Connected' : 'Disconnected'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${isAuthenticated ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-                  <span className="text-xs text-gray-500">
-                    {isAuthenticated ? 'Authenticated' : 'Not Authenticated'}
-                  </span>
-                </div>
-                {userData && (
-                  <div className="text-xs text-gray-500">
-                    Logged in as: {userData.username}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {/* Back Button */}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={clearSelectedConversation}
+                    className="h-8 w-8 p-0"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+
+                  {/* Profile Avatar */}
+                  <ProfileAvatar
+                    conversation={selectedConversation}
+                    currentUserId={user?.id}
+                    size="lg"
+                  />
+
+                  <div>
+                    {selectedConversation.isGroup ? (
+                      <div>
+                        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                          {selectedConversation.groupName}
+                        </h2>
+                        <p className="text-sm text-gray-500">
+                          {selectedConversation.participants.length} members
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                          {getOtherParticipant(selectedConversation)?.name}
+                        </h2>
+                        <p className="text-sm text-gray-500">
+                          @{getOtherParticipant(selectedConversation)?.username}
+                        </p>
+                      </div>
+                    )}
                   </div>
+                </div>
+
+                {/* Group Management Button */}
+                {selectedConversation.isGroup && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsGroupManagementOpen(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <Settings className="h-4 w-4" />
+                    Settings
+                  </Button>
                 )}
-              </div> */}
+              </div>
             </div>
 
             {/* Messages */}
@@ -874,6 +1046,23 @@ export default function ChatPage() {
           </div>
         )}
       </div>
+
+      {/* Group Creation Popup */}
+      <GroupCreationPopup
+        isOpen={isGroupCreationOpen}
+        onClose={() => setIsGroupCreationOpen(false)}
+        onCreateGroup={createGroup}
+        currentUserId={user?.id || ''}
+      />
+
+      {/* Group Management Popup */}
+      <GroupManagementPopup
+        isOpen={isGroupManagementOpen}
+        onClose={() => setIsGroupManagementOpen(false)}
+        conversation={selectedConversation}
+        currentUserId={user?.id || ''}
+        onGroupUpdated={handleGroupUpdated}
+      />
     </div>
   )
 }
