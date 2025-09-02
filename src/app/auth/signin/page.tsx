@@ -82,11 +82,11 @@ export default function SigninPage() {
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 dark:bg-gray-900">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-center text-2xl font-bold">
-            Welcome back
+          <CardTitle className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-center text-2xl font-bold text-transparent">
+            Welcome back to Pulse
           </CardTitle>
           <CardDescription className="text-center">
-            Enter your credentials to sign in
+            Sign in to continue your conversations
           </CardDescription>
         </CardHeader>
         <CardContent>

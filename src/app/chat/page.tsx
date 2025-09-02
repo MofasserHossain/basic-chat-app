@@ -151,8 +151,8 @@ export default function ChatPage() {
           playNotificationSound()
         }
         // Update conversation list with new message
-        setConversations((prev) =>
-          prev.map((conv) => {
+        setConversations((prev) => {
+          const updated = prev.map((conv) => {
             if (conv.id === data.conversationId) {
               // Add the new message to the conversation
               const updatedMessages = [data.message, ...(conv.messages || [])]
@@ -160,7 +160,7 @@ export default function ChatPage() {
               updatedMessages.sort(
                 (a, b) =>
                   new Date(b.createdAt).getTime() -
-                  new Date(b.createdAt).getTime(),
+                  new Date(a.createdAt).getTime(),
               )
 
               return {
@@ -170,8 +170,15 @@ export default function ChatPage() {
               }
             }
             return conv
-          }),
-        )
+          })
+
+          // Sort conversations by latest message time (newest first)
+          return updated.sort((a, b) => {
+            const aTime = a.messages?.[0]?.createdAt || a.updatedAt
+            const bTime = b.messages?.[0]?.createdAt || b.updatedAt
+            return new Date(bTime).getTime() - new Date(aTime).getTime()
+          })
+        })
       },
     )
 
@@ -665,7 +672,7 @@ export default function ChatPage() {
       <div className="flex w-80 flex-col border-r border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
         <div className="border-b border-gray-200 p-4 dark:border-gray-700">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-semibold">Chats</h1>
+            <h1 className="text-xl font-semibold">Pulse</h1>
             <div className="flex items-center gap-2">
               <Popover open={isSearchOpen} onOpenChange={setIsSearchOpen}>
                 <PopoverTrigger asChild>
@@ -675,7 +682,7 @@ export default function ChatPage() {
                 </PopoverTrigger>
                 <PopoverContent className="w-80">
                   <div className="space-y-4">
-                    <h3 className="font-medium">Start a new conversation</h3>
+                    <h3 className="font-medium">Start a new chat</h3>
                     <Input
                       placeholder="Search by username or name..."
                       value={searchQuery}
@@ -769,9 +776,9 @@ export default function ChatPage() {
           ) : conversations.length === 0 ? (
             <div className="flex items-center justify-center py-8">
               <div className="text-center text-gray-500 dark:text-gray-400">
-                <p className="text-sm">No conversations yet</p>
+                <p className="text-sm">No chats yet</p>
                 <p className="mt-1 text-xs">
-                  Start a new chat to begin messaging
+                  Start a new conversation to begin messaging
                 </p>
               </div>
             </div>
@@ -925,33 +932,101 @@ export default function ChatPage() {
                 )}
 
                 {!isLoadingConversation &&
-                  messages.map((message, index) => (
-                    <div
-                      key={message.id + index}
-                      className={cn(
-                        'flex',
-                        message.senderId === user?.id
-                          ? 'justify-end'
-                          : 'justify-start',
-                      )}
-                    >
+                  messages.map((message, index) => {
+                    const prevMessage = index > 0 ? messages[index - 1] : null
+                    const nextMessage =
+                      index < messages.length - 1 ? messages[index + 1] : null
+                    const isSameSender =
+                      prevMessage?.senderId === message.senderId
+                    const isNextSameSender =
+                      nextMessage?.senderId === message.senderId
+                    const showSenderInfo =
+                      selectedConversation?.isGroup &&
+                      message.senderId !== user?.id &&
+                      !isSameSender
+
+                    return (
                       <div
-                        className={`max-w-xs rounded-lg px-4 py-2 lg:max-w-md ${
+                        key={message.id + index}
+                        className={cn(
+                          'flex',
                           message.senderId === user?.id
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-gray-200 text-gray-900 dark:bg-gray-700 dark:text-gray-100'
-                        }`}
+                            ? 'justify-end'
+                            : 'justify-start',
+                        )}
                       >
-                        <p>{message.content}</p>
-                        <p className="mt-1 text-xs opacity-70">
-                          {new Date(message.createdAt).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </p>
+                        <div className="flex max-w-[70%] flex-col">
+                          {/* Show sender info for group chats and messages from other users */}
+                          <div className="flex items-end gap-1">
+                            {/* Avatar for other users in group chats */}
+                            {selectedConversation?.isGroup &&
+                              message.senderId !== user?.id && (
+                                <div className="mb-1 flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-green-400 to-green-600 text-xs font-medium text-white">
+                                  {message.sender.name.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                            <div
+                              className={cn(
+                                'rounded-2xl px-3 py-2 shadow-sm',
+                                message.senderId === user?.id
+                                  ? 'bg-green-500 text-white'
+                                  : 'bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100',
+                                // WhatsApp-style message bubble shapes
+                                message.senderId === user?.id
+                                  ? isNextSameSender
+                                    ? 'rounded-br-md'
+                                    : 'rounded-br-sm'
+                                  : isNextSameSender
+                                    ? 'rounded-bl-md'
+                                    : 'rounded-bl-sm',
+                                // Add margin for spacing between different senders
+                                !isSameSender &&
+                                  message.senderId !== user?.id &&
+                                  'mt-1',
+                                !isNextSameSender &&
+                                  message.senderId !== user?.id &&
+                                  'mb-1',
+                              )}
+                            >
+                              {showSenderInfo && (
+                                <p className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                  {message.sender.name}
+                                </p>
+                              )}
+                              <p className="text-sm leading-relaxed">
+                                {message.content}
+                              </p>
+                              <div className="mt-1 flex items-center justify-end gap-1">
+                                <p className="text-xs opacity-70">
+                                  {new Date(
+                                    message.createdAt,
+                                  ).toLocaleTimeString([], {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </p>
+                                {message.senderId === user?.id && (
+                                  <div className="flex items-center">
+                                    <svg
+                                      className="h-3 w-3 text-white opacity-70"
+                                      fill="currentColor"
+                                      viewBox="0 0 20 20"
+                                    >
+                                      <path
+                                        fillRule="evenodd"
+                                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                        clipRule="evenodd"
+                                      />
+                                    </svg>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
 
                 {/* Typing indicators */}
                 {typingUsers.size > 0 && (
@@ -1037,10 +1112,10 @@ export default function ChatPage() {
           <div className="flex flex-1 items-center justify-center">
             <div className="text-center">
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                Select a conversation
+                Welcome to Pulse
               </h3>
               <p className="text-gray-500 dark:text-gray-400">
-                Choose a chat from the left sidebar to start messaging
+                Choose a conversation from the sidebar to start messaging
               </p>
             </div>
           </div>

@@ -120,6 +120,9 @@ export function useSocketConnection(): UseSocketConnectionReturn {
       // console.log('WebSocket authentication successful:', userData)
       setIsAuthenticated(true)
       setUserData(userData)
+
+      // Join user room for personal notifications
+      socket.emit('join:user_room')
     })
 
     socket.on('auth:error', (error) => {
