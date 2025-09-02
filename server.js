@@ -76,6 +76,14 @@ app.prepare().then(() => {
     }
   })
 
+  // A, B, C
+
+  // A => B
+
+  // B => C
+
+  // A => C
+
   io.on('connection', (socket) => {
     console.log(`User ${socket.userData.username} connected: ${socket.id}`)
 
